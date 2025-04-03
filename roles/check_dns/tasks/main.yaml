@@ -43,8 +43,22 @@
   tags: check_dns, dns
   shell: "dig +short api-int.{{ env.cluster.networking.metadata_name }}.{{ env.cluster.networking.base_domain }} | tail -n1"
   register: api_int_lookup
-  failed_when: ((env.bastion.options.loadbalancer.on_bastion) and (env.bastion.networking.ip != api_int_lookup.stdout)) or ((not env.bastion.options.loadbalancer.on_bastion) and (env.bastion.options.loadbalancer.private_ip != api_int_lookup.stdout) )
-
+  failed_when: 
+    (
+      env.bastion.networking.internal_ip is defined and
+      (
+        (env.bastion.options.loadbalancer.on_bastion and env.bastion.networking.internal_ip != api_int_lookup.stdout) or
+        (not env.bastion.options.loadbalancer.on_bastion and env.bastion.options.loadbalancer.private_ip != api_int_lookup.stdout)
+      )
+    ) or
+    (
+      env.bastion.networking.internal_ip is not defined and
+      (
+        (env.bastion.options.loadbalancer.on_bastion and env.bastion.networking.ip != api_int_lookup.stdout) or
+        (not env.bastion.options.loadbalancer.on_bastion and env.bastion.options.loadbalancer.private_ip != api_int_lookup.stdout)
+      )
+    )
+  
 - name: Check internal cluster DNS resolution for bootstrap
   tags: check_dns, dns
   shell: "dig +short {{ env.cluster.nodes.bootstrap.hostname }}.{{ env.cluster.networking.metadata_name }}.{{ env.cluster.networking.base_domain }} | tail -n1"
