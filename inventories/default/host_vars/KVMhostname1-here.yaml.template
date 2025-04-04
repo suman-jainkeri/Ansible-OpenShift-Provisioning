@@ -57,7 +57,7 @@ lpar:
     subnet_cidr: #X
     nic:
       osa_card:
-        dev_num: 0.0.1100,0.0.1101,0.0.1102,layer2=1
+        dev_num: 0.0.1100,0.0.1101,0.0.1102
       card1:
         name: #X
         adapter: #X
