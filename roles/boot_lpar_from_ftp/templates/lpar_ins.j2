@@ -1,0 +1,5 @@
+* minimal lpar ins file, created by AOP
+images/{{ rhcos_live_kernel }} 0x00000000
+images/{{ rhcos_live_initrd }} 0x02000000
+images/{{ _host.lpar.name | lower }}.prm 0x00010480
+images/{{ rhcos_live_initrd }}.addrsize 0x00010408

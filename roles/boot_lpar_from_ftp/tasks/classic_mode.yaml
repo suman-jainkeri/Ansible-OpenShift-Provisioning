@@ -1,0 +1,38 @@
+---
+
+- name: "Boot LPAR node using boot from ftp function on {{ _host.lpar.name }}"
+  block:
+    - name: Create temporary config file
+      ansible.builtin.tempfile:
+        state: file
+        suffix: temp
+      register: _config_yaml_tempfile
+
+    - name: Create HMC ftp config file from template
+      ansible.builtin.template:
+        src: "hmc_load_from_ftp.j2"
+        dest: "{{ _config_yaml_tempfile.path }}"
+        mode: u=rw,g=r,o=r
+        force: true
+
+    - name: "Execute HMC load from ftp function on {{ _host.lpar.name }}"
+      ansible.builtin.shell: |
+        pwd
+        whoami
+        {{ role_path }}/files/hmc_load_from_ftp.py "{{ _config_yaml_tempfile.path }}"
+      register: cmd_output
+
+    - name: Debug, print above command output
+      ansible.builtin.debug:
+        var: cmd_output
+
+  rescue:
+    - name: Cleanup on error
+      block:
+        - name: Cleanup on error
+          ansible.builtin.shell: |
+            # Delete tempfile
+            rm -f "{{ _config_yaml_tempfile.path }}"
+
+        - name: "HMC load from ftp function failed on {{ _host.lpar.name }}"
+          ansible.builtin.fail:

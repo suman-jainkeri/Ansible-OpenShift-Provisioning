@@ -1,0 +1,134 @@
+---
+- name: Check role/task parameters
+  ansible.builtin.fail:
+    msg: "Error: loop control variable 'idx' is not defined"
+  when: idx is not defined
+
+- name: Cleanup existing directories on FTP server
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ env.file_server.ftp_dir }}iso"
+    - "{{ env.file_server.ftp_dir }}images"
+  delegate_to: "{{ env.file_server.ip }}"
+  remote_user: "{{ env.file_server.user }}"
+
+- name: Create required directories on FTP server
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - "{{ env.file_server.ftp_dir }}iso"
+    - "{{ env.file_server.ftp_dir }}images"
+  delegate_to: "{{ env.file_server.ip }}"
+  remote_user: "{{ env.file_server.user }}"
+
+- name: Set 'boot_lpar_from_ftp_first_run' variable
+  ansible.builtin.set_fact:
+    boot_lpar_from_ftp_first_run: true
+
+- name: Check to make sure that the KVM host has a corresponding inventory host_vars file named with matching hostname and .yaml extension.
+  remote_user: "{{ env.file_server.user }}"
+  delegate_to: "{{ env.file_server.ip }}"
+  ansible.builtin.stat:
+    path: "{{ env.file_server.ftp_dir }}iso/{{ rhcos_live_iso }}"
+  register: rhcos_live_iso_file
+
+- name: If not available, download Red Hat CoreOS ISO to HMC ftp server
+  remote_user: "{{ env.file_server.user }}"
+  delegate_to: "{{ env.file_server.ip }}"
+  when: not rhcos_live_iso_file.stat.exists
+  block:
+    - name: If not available, download Red Hat CoreOS ISO to HMC ftp server
+      ansible.builtin.get_url:
+        url: "{{ item.baseurl }}{{ item.file }}"
+        dest: "{{ env.file_server.ftp_dir }}iso/{{ item.file }}"
+        mode: "0644"
+      loop:
+        - { baseurl: "{{ rhcos_download_url }}", file: "{{ rhcos_live_iso }}" }
+
+    - name: Extract boot artifacts from ISO, e.g. {{ rhcos_live_kernel }}"
+      ansible.builtin.shell: |
+        set -e
+        cd "{{ env.file_server.ftp_dir }}images"
+        if 7z l "../iso/{{ rhcos_live_iso }}" | grep "images/pxeboot/kernel.img"; then
+          7z e "../iso/{{ rhcos_live_iso }}" -so images/pxeboot/kernel.img > "{{ rhcos_live_kernel }}"
+        else
+          7z e "../iso/{{ rhcos_live_iso }}" -so images/pxeboot/vmlinuz > "{{ rhcos_live_kernel }}"
+        fi
+        7z e "../iso/{{ rhcos_live_iso }}" -so images/pxeboot/initrd.img > "{{ rhcos_live_initrd }}"
+        7z e "../iso/{{ rhcos_live_iso }}" -so images/initrd.addrsize > "{{ rhcos_live_initrd }}.addrsize"
+
+#    Date      Time    Attr         Size   Compressed  Name
+# ------------------- ----- ------------ ------------  ------------------------
+# 2024-05-29 19:44:58 .....         2048         2048  boot.catalog
+# 2024-05-29 19:44:58 D....                            coreos
+# 2024-05-29 19:38:11 .....          684          684  coreos/features.json
+# 2024-05-29 19:44:58 .....           76           76  coreos/igninfo.json
+# 2024-05-29 19:44:58 .....          259          259  coreos/kargs.json
+# 2024-05-29 19:44:58 .....        16384        16384  coreos/miniso.dat
+# 2024-05-29 19:44:58 .....          149          149  generic.ins
+# 2024-05-29 19:44:58 D....                            images
+# 2024-05-29 19:44:58 .....     67210176     67210176  images/cdboot.img
+# 2024-05-29 19:44:58 .....           91           91  images/cdboot.prm
+# 2024-05-29 19:44:58 .....           91           91  images/generic.prm
+# 2024-05-29 19:44:58 .....           91           91  images/genericdvd.prm
+# 2024-05-29 19:44:58 .....           16           16  images/initrd.addrsize
+# 2024-05-29 19:44:58 D....                            images/pxeboot
+# 2024-05-29 19:44:58 .....     57686976     57686976  images/pxeboot/initrd.img
+# 2024-05-29 19:38:11 .....      9257445      9257445  images/pxeboot/kernel.img
+# 2024-05-29 19:44:54 .....    974301696    974301696  images/pxeboot/rootfs.img
+# 2024-05-29 19:44:58 .....          163          163  images/redhat.exec
+#                     .....     33553920     33553920  [BOOT]/Boot-NoEmul.img
+# ------------------- ----- ------------ ------------  ------------------------
+# 2024-05-29 19:44:58         1142030265   1142030265  16 files, 3 folders
+
+- name: Include LPAR host variablese
+  ansible.builtin.include_vars:
+    file: "{{ inventory_dir }}/host_vars/{{ parm_lpar_names[idx] }}.yaml"
+    name: _host
+
+- name: Update local variable
+  ansible.builtin.set_fact:
+    _hmc_load_from_ftp_ins_file: "{{ env.file_server.ftp_dir }}{{ _host.lpar.name | lower }}.ins"
+
+- name: Create and upload prm file
+  ansible.builtin.copy:
+    dest: "{{ env.file_server.ftp_dir }}images/{{ _host.lpar.name | lower }}.prm"
+    content: "{{ (_host.lpar_prm_config1 | join(' ') + ' ' + parm_lpar_prm_configs2[idx]) + '\n' }}"
+    mode: "0644"
+  remote_user: "{{ env.file_server.user }}"
+  delegate_to: "{{ env.file_server.ip }}"
+
+- name: Debug parm config1 and config2 file
+  ansible.builtin.debug:
+    var: _host.lpar_prm_config1, parm_lpar_prm_configs2[idx]
+
+- name: Create and upload ins file from template
+  ansible.builtin.template:
+    src: "lpar_ins.j2"
+    dest: "{{ env.file_server.ftp_dir }}{{ _host.lpar.name | lower }}.ins"
+    mode: "0644"
+  remote_user: "{{ env.file_server.user }}"
+  delegate_to: "{{ env.file_server.ip }}"
+
+- name: Show FTP directory tree structure
+  ansible.builtin.shell: |
+    tree -a "{{ env.file_server.ftp_dir }}"
+  register: tree_output
+  changed_when: false
+  ignore_errors: true
+
+- name: Print directory tree output
+  ansible.builtin.debug:
+    var: tree_output.stdout
+
+- name: Lood classic mode task
+  when: (_host.cpc_dpm_enabled is defined and not _host.cpc_dpm_enabled) or _host.cpc_dpm_enabled is not defined
+  ansible.builtin.include_tasks: "classic_mode.yaml"
+
+- name: Lood dpm mode task
+  when: _host.cpc_dpm_enabled is defined and _host.cpc_dpm_enabled
+  ansible.builtin.include_tasks: "dpm_mode.yaml"

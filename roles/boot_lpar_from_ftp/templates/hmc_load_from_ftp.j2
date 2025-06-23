@@ -1,0 +1,10 @@
+host: {{ _host.hmc.host }}
+userid: {{ _host.hmc.auth.user }}
+password: {{ _host.hmc.auth.pass }}
+ftp_config:
+  host: {{ env.hmc_ftp_server.ip }}
+  username: {{ env.hmc_ftp_server.user }}
+  password: {{ env.hmc_ftp_server.pass }}
+  file_path: {{ _hmc_load_from_ftp_ins_file }}
+  protocol: {{ env.hmc_ftp_server.protocol }}
+lpar: {{ _host.lpar.name }}

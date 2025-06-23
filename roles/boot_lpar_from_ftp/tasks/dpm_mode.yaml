@@ -1,0 +1,65 @@
+---
+
+- name: Configure FTP boot server and start the dpm mode partition - debug
+  # Enable this function to debug ftp issues
+  when: false
+  block:
+    - name: Configure FTP boot server and start the dpm mode partition - debug
+      ansible.builtin.shell: |
+        echo '
+        hmc_host: "{{ _host.hmc.host }}"
+        hmc_auth:
+          userid: "{{ _host.hmc.auth.user }}"
+          password: "***"
+          verify: false
+        cpc_name: "{{ _host.cpc_name }}"
+        name: "{{ _host.lpar.name }}"
+        state: active
+        select_properties:
+        properties:
+          boot_device: "{{ env.file_server.protocol }}"
+          boot_ftp_host: "{{ env.file_server.ip }}"
+          boot_ftp_username: "{{ env.file_server.user }}"
+          boot_ftp_password: "{{ env.file_server.pass }}"
+          boot_ftp_insfile: "{{ _hmc_load_from_ftp_ins_file }}"
+        '
+      register: part1
+
+    - name: Show above command output - debug
+      ansible.builtin.debug:
+        var: part1
+
+- name: "Configure FTP boot server and start the dpm mode partition {{ _host.lpar.name }}"
+  block:
+    - name: "Configure FTP boot server and start the dpm mode partition {{ _host.lpar.name }}"
+      ibm.ibm_zhmc.zhmc_partition:
+        hmc_host: "{{ _host.hmc.host }}"
+        hmc_auth:
+          userid: "{{ _host.hmc.auth.user }}"
+          password: "{{ _host.hmc.auth.pass }}"
+          verify: false
+        cpc_name: "{{ _host.cpc_name }}"
+        name: "{{ _host.lpar.name }}"
+        state: active
+        select_properties:
+        properties:
+          boot_device: "{{ env.file_server.protocol }}"
+          boot_ftp_host: "{{ env.file_server.ip }}"
+          boot_ftp_username: "{{ env.file_server.user }}"
+          boot_ftp_password: "{{ env.file_server.pass }}"
+          boot_ftp_insfile: "{{ _hmc_load_from_ftp_ins_file }}"
+      register: part1
+      # Recover on the following error:
+      # fatal: [127.0.0.1]: FAILED! => {"changed": false,
+      # "msg": "HTTPError: 409,2: The operation could not be completed because the object is busy with another operation. \
+      # Wait for that operation to complete, and then try this operation again. [POST /api/partitions/e53e158c-3de8-11ef-aba8-00106f2372f8]"}
+      #
+      # "msg": "StatusError: Abandoning the start of partition 't313lp07' on CPC 'T313' after reaching status 'paused' after an earlier 'Start Partition' operation."}
+      #      until: (part1.msg is not defined) or ("then try this operation again." not in part1.msg) or ("Abandoning the start of partition" not in part1.msg) or ("object is busy with another operation" not in part1.msg)
+      #
+      # TODO: Add error check
+      ignore_errors: true
+
+    - name: Show above command output
+      ansible.builtin.debug:
+        var: part1

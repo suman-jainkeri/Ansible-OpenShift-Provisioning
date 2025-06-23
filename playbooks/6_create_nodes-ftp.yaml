@@ -1,0 +1,118 @@
+---
+- name: 6 create nodes - find lpar host files
+  hosts: localhost
+  vars_files:
+    - "{{ inventory_dir }}/group_vars/all.yaml"
+  tasks:
+    - block:
+      - name: Loop over node types and include role
+        include_role:
+          name: check_for_lpar_nodes
+        loop:
+          - bootstrap
+          - control
+          - compute
+        loop_control:
+          loop_var: node_type
+        register: result
+      ignore_errors: true
+
+    - name: fail the play if the previous command did not succeed
+      fail: msg="Check for lpar nodes failed for bootstrap or control node"
+      when:
+        - "'bootstrap' in result.msg"
+        - "'control' in result.msg"
+
+- name: 6 create nodes - Stop LPARs, if running in dpm mode
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "{{ inventory_dir }}/group_vars/all.yaml"
+  tasks:
+    - name: Stop bootstrap node LPARs, if running in dpm mode
+      when: env.cluster.nodes.bootstrap.lpar_name is defined
+      ansible.builtin.include_role:
+        name: stop_lpar_partition
+      loop: "{{ [env.cluster.nodes.bootstrap.lpar_name] }}"
+      loop_control:
+        loop_var: lpar_name
+
+    - name: Stop control node LPARs, if running in dpm mode
+      when: env.cluster.nodes.control.lpar_name[0] is defined
+      ansible.builtin.include_role:
+        name: stop_lpar_partition
+      loop: "{{ env.cluster.nodes.control.lpar_name }}"
+      loop_control:
+        loop_var: lpar_name
+
+    - name: Stop compute node LPARs, if running in dpm mode
+      when: env.cluster.nodes.compute.lpar_name[0] is defined
+      ansible.builtin.include_role:
+        name: stop_lpar_partition
+      loop: "{{ env.cluster.nodes.compute.lpar_name }}"
+      loop_control:
+        loop_var: lpar_name
+
+
+- name: 6 create nodes - create bootstrap using LPAR boot from ftp
+  hosts: localhost
+  vars_files:
+    - "{{ inventory_dir }}/group_vars/all.yaml"
+  tasks:
+    - name: Boot bootstrap LPAR from ftp
+      when: env.cluster.nodes.bootstrap.lpar_name[0] is defined
+      ansible.builtin.include_role:
+        name: boot_lpar_from_ftp
+      vars:
+        node: "{{ env.cluster.nodes.bootstrap }}"
+      # Loop is not really required, because we have only one bootsrap.
+      loop: "{{ q('list', env.cluster.nodes.bootstrap.lpar_name) | flatten }}"
+      loop_control:
+        loop_var: lpar_name
+        index_var: idx
+
+
+- name: 6 create nodes - create control using LPAR boot from ftp
+  hosts: localhost
+  vars_files:
+    - "{{ inventory_dir }}/group_vars/all.yaml"
+  tasks:
+    - name: Boot control LPAR from ftp
+      when: env.cluster.nodes.control.lpar_name[0] is defined
+      ansible.builtin.include_role:
+        name: boot_lpar_from_ftp
+      vars:
+        node: "{{ env.cluster.nodes.control }}"
+      loop: "{{ q('list', env.cluster.nodes.control.lpar_name) | flatten }}"
+      loop_control:
+        loop_var: lpar_name
+        index_var: idx
+
+
+- name: 6 create nodes - wait for bootstrap to connect to control plane
+  hosts: bastion
+  become: true
+  environment:
+    KUBECONFIG: "{{ '/home/' if (env.bastion.access.user != 'root') else '/'}}{{ env.bastion.access.user }}/.kube/config"
+  gather_facts: true
+  vars_files:
+    - "{{ inventory_dir }}/group_vars/all.yaml"
+  roles:
+    - wait_for_bootstrap
+
+
+- name: 6 create nodes - create compute nodes using LPAR boot from ftp
+  hosts: localhost
+  vars_files:
+    - "{{ inventory_dir }}/group_vars/all.yaml"
+  tasks:
+    - name: Boot LPAR from ftp
+      when: env.cluster.nodes.compute.lpar_name[0] is defined
+      ansible.builtin.include_role:
+        name: boot_lpar_from_ftp
+      vars:
+        node: "{{ env.cluster.nodes.compute }}"
+      loop: "{{ env.cluster.nodes.compute.lpar_name }}"
+      loop_control:
+        loop_var: lpar_name
+        index_var: idx

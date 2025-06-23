@@ -1,0 +1,13 @@
+---
+
+# ftp file server directory structure:
+#   ftp        : Main directory for ins files
+#   ftp/images : Directory for kernel and initrd images
+#   ftp/iso    : Directory for ISO images
+
+# Variable 'node' needs to be defined, before this role is called
+
+parm_lpar_names: "{{ q('list', node.lpar_name) | flatten }}"
+parm_lpar_ins_filenames: "{{ q('list', node.lpar_ins_file) | default([]) | flatten }}"
+parm_lpar_prm_filenames: "{{ q('list', node.lpar_prm_file) | default([]) | flatten }}"
+parm_lpar_prm_configs2: "{{ q('list', node.lpar_prm_config2) | default([]) | flatten }}"

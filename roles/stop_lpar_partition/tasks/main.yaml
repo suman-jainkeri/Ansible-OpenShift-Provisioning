@@ -1,0 +1,29 @@
+---
+- name: Include LPAR host variablese
+  ansible.builtin.include_vars:
+    file: "{{ inventory_dir }}/host_vars/{{ lpar_name }}.yaml"
+    name: _node
+
+- name: "Stop and configure the dpm mode partition {{ _node.lpar.name }}"
+  when: _node.cpc_dpm_enabled is defined and _node.cpc_dpm_enabled
+  vars:
+    _zhmc_auth:
+      userid: "{{ _node.hmc.auth.user }}"
+      password: "{{ _node.hmc.auth.pass }}"
+      verify: false
+  ibm.ibm_zhmc.zhmc_partition:
+    hmc_host: "{{ _node.hmc.host }}"
+    hmc_auth: "{{ _zhmc_auth }}"
+    cpc_name: "{{ _node.cpc_name }}"
+    name: "{{ _node.lpar.name }}"
+    state: stopped
+    properties:
+      description: "{{ _node.lpar.description }}"
+      ifl_processors: "{{ _node.lpar.ifl.count }}"
+      initial_memory: "{{ _node.lpar.ifl.initial_memory }}"
+      maximum_memory: "{{ _node.lpar.ifl.max_memory }}"
+  register: cmd_output
+
+- name: Show above command output
+  ansible.builtin.debug:
+    var: cmd_output
