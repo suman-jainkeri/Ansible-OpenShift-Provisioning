@@ -1,0 +1,50 @@
+networking:
+  mode: osa
+  internal_ip: null
+  hostname: t313lp33
+  ip: 172.23.239.33
+  ipv6: null
+  subnetmask: 255.255.0.0
+  ipv6_prefix: null
+  gateway: 172.23.0.1
+  ipv6_gateway: null
+  nameserver1: 172.23.239.32
+  device1: enc1150
+  nameserver2: 172.23.0.1
+
+storage:
+  pool_path: null
+
+# Section 2 - CPC & HMC
+cpc_name: T313
+cpc_dpm_enabled: true
+hmc:
+  host: hmca4.boeblingen.de.ibm.com
+  auth:
+    user: "vasant"
+    pass: "@36birthday2025"
+
+# Section 3 - LPAR
+lpar:
+  name: t313lp33
+  description: null
+  access:
+    user: null
+    pass: null
+    root_pass: null
+
+  # Section 4 - IFL & Memory
+  ifl:
+    count: 4
+    initial_memory: 16384
+    max_memory: 16384
+
+# Default prm file settings
+lpar_prm_config1:
+  - cio_ignore=all,!condev
+  - rd.neednet=1
+  - console=ttysclp0
+  - rd.znet=qeth,0.0.1150,0.0.1151,0.0.1152,layer2=1
+  - ip=172.23.239.33::172.23.0.1:255.255.0.0:t313lp33.ocpz.dpm.solntest:enc1150:none
+  - zfcp.allow_lun_scan=0
+  - rd.dasd=0.0.4900
